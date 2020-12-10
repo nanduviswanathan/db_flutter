@@ -1,83 +1,94 @@
-import 'package:sqflite/sqflite.dart';
-import 'dart:async';
-import 'dart:io';
-import 'package:path_provider/path_provider.dart';
 import 'package:database_app/models/note.dart';
+import 'package:sqflite/sqflite.dart';
+import 'dart:io';
+import 'dart:async';
+import 'package:path/path.dart';
 
 class DatabaseHelper {
 
-  static DatabaseHelper _databaseHelper; //singleton Databasehelper
+  static final _databaseName = "cardb.db";
+  static final _databaseVersion = 1;
+
+  static final table = 'cars_table';
+
+  static final columnId = 'id';
+  static final columnName = 'name';
+  static final columnMiles = 'miles';
+
+  // make this a singleton class
+  DatabaseHelper._privateConstructor();
+  static final DatabaseHelper instance = DatabaseHelper._privateConstructor();
+
+  // only have a single app-wide reference to the database
   static Database _database;
-
-  String noteTable = 'note_table';
-  String colId = 'id';
-  String colName = 'name';
-  String colNumber = 'number';
-
-  DatabaseHelper._createInstance(); //named constructor to create instance of DatabaseHelper
-
-  factory DatabaseHelper(){
-
-    if ( _databaseHelper == null) {
-      _databaseHelper = DatabaseHelper._createInstance();
-    }
-
-    return _databaseHelper;
-
-  }
-
   Future<Database> get database async {
-    if (_database == null){
-      _database = await initializeDatabase();
-    }
+    if (_database != null) return _database;
+    // lazily instantiate the db the first time it is accessed
+    _database = await _initDatabase();
     return _database;
   }
 
-  Future<Database> initializeDatabase() async {
-    Directory directory = await getApplicationDocumentsDirectory();
-    String path = directory.path + 'notes.db';
-
-    var notesDatabase = await openDatabase(path, version: 1, onCreate: _createDb );
-    return notesDatabase;
+  // this opens the database (and creates it if it doesn't exist)
+  _initDatabase() async {
+    String path = join(await getDatabasesPath(), _databaseName);
+    return await openDatabase(path,
+        version: _databaseVersion,
+        onCreate: _onCreate);
   }
 
-  void _createDb(Database db, int newVersion) async {
-    await db.execute('CREATE TABLE $noteTable($colId INTEGER PRIMARY KEY AUTOINCREMENT, $colName TEXT, $colNumber TEXT)');
-  }
-  //FETCH DATA FROM DB
-  Future<List<Map<String, dynamic>>> getNoteMapList() async {
-    Database db = await this.database;
-
-  //  var result = await db.rawQuery('SELECT * FROM $noteTable order by $colName ASC');//rawQuery
-    var result = await db.query(noteTable, orderBy: '$colName ASC'); //helperfn
-    return result;
-  }
-  //INSERT DATA TO DB
-  Future<int> insertNote(Note note) async {
-    Database db = await this.database;
-    var result = await db.insert(noteTable, note.toMap());
-    return result;
+  // SQL code to create the database table
+  Future _onCreate(Database db, int version) async {
+    await db.execute('''
+          CREATE TABLE $table (
+            $columnId INTEGER PRIMARY KEY AUTOINCREMENT,
+            $columnName TEXT NOT NULL,
+            $columnMiles INTEGER NOT NULL
+          )
+          ''');
   }
 
-  //GET NO.OF NOTE OBJECTS IN DB
-  Future<int> getCount() async {
-    Database db = await this.database;
-    List<Map<String, dynamic>> x = await db.rawQuery('SELECT COUNT (*) FROM $noteTable');
-    int result = Sqflite.firstIntValue(x);
-    return result;
+  // Helper methods
+
+  // Inserts a row in the database where each key in the Map is a column name
+  // and the value is the column value. The return value is the id of the
+  // inserted row.
+  Future<int> insert(Car car) async {
+    Database db = await instance.database;
+    return await db.insert(table, {'name': car.name, 'miles': car.miles});
   }
 
-  // Get the 'Map List' [List<Map>] and convert it to 'Note List' [List<Note>]
-  Future<List<Note>> getNoteList() async {
-    var noteMapList = await getNoteMapList();
-    int count = noteMapList.length;
-
-    List<Note> noteList = List<Note>();
-
-    for (int i = 0; i < count ; i++){
-      noteList.add(Note.fromMapObject(noteMapList[i]));
-    }
-    return noteList;
+  // All of the rows are returned as a list of maps, where each map is
+  // a key-value list of columns.
+  Future<List<Map<String, dynamic>>> queryAllRows() async {
+    Database db = await instance.database;
+    return await db.query(table);
   }
 
+  // Queries rows based on the argument received
+  Future<List<Map<String, dynamic>>> queryRows(name) async {
+    Database db = await instance.database;
+    return await db.query(table, where: "$columnName LIKE '%$name%'");
+  }
+
+  // All of the methods (insert, query, update, delete) can also be done using
+  // raw SQL commands. This method uses a raw query to give the row count.
+  Future<int> queryRowCount() async {
+    Database db = await instance.database;
+    return Sqflite.firstIntValue(await db.rawQuery('SELECT COUNT(*) FROM $table'));
+  }
+
+  // We are assuming here that the id column in the map is set. The other
+  // column values will be used to update the row.
+  Future<int> update(Car car) async {
+    Database db = await instance.database;
+    int id = car.toMap()['id'];
+    return await db.update(table, car.toMap(), where: '$columnId = ?', whereArgs: [id]);
+  }
+
+  // Deletes the row specified by the id. The number of affected rows is
+  // returned. This should be 1 as long as the row exists.
+  Future<int> delete(int id) async {
+    Database db = await instance.database;
+    return await db.delete(table, where: '$columnId = ?', whereArgs: [id]);
+  }
 }

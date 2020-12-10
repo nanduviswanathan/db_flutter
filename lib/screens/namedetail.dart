@@ -5,38 +5,39 @@ import 'package:database_app/utils/database_helper.dart';
 
 class NameAdd extends StatefulWidget{
 
-  final Note note;
-
-  NameAdd(this.note);
-
 
   @override
   State<StatefulWidget> createState() {
 
-    return NameAddState(this.note);
+    return NameAddState();
   }
 
 }
 
 class NameAddState extends State<NameAdd>{
 
+  final dbHelper = DatabaseHelper.instance;
+  List<Car> cars = [];
 
-  DatabaseHelper helper = DatabaseHelper();
 
-  Note note;
 
   TextEditingController nameController = TextEditingController();
   TextEditingController numberController = TextEditingController();
+  final GlobalKey<ScaffoldState> _scaffoldKey = new GlobalKey<ScaffoldState>();
 
-  NameAddState(this.note);
+  // void _showMessageInScaffold(String message){
+  //   _scaffoldKey.currentState.showSnackBar(
+  //       SnackBar(
+  //         content: Text(message),
+  //       )
+  //   );
+  // }
 
 
 
   @override
   Widget build(BuildContext context) {
 
-    nameController.text = note.name;
-    numberController.text = note.number;
 
     return  WillPopScope(
 
@@ -63,7 +64,6 @@ class NameAddState extends State<NameAdd>{
                   controller: nameController,
                   onChanged: (value){
                     debugPrint('Somethingh chged');
-                    updateName();
                   },
                   decoration: InputDecoration(
                     labelText: 'Name',
@@ -81,7 +81,6 @@ class NameAddState extends State<NameAdd>{
                   controller: numberController,
                   onChanged: (value){
                     debugPrint('Somethingh chged');
-                    updateNumber();
                   },
                   decoration: InputDecoration(
                     labelText: 'Number',
@@ -98,10 +97,11 @@ class NameAddState extends State<NameAdd>{
                   child: Text('Save',
                   textScaleFactor: 1.5,),
                   onPressed: (){
-                    setState(() {
                       debugPrint("Save Button Pressed");
-                      _save();
-                    });
+                      String name = nameController.text;
+                      int miles = int.parse(numberController.text);
+                      _insert(name, miles);
+
                   },
                 ),
             )
@@ -111,41 +111,20 @@ class NameAddState extends State<NameAdd>{
     ));
   }
 
+  void _insert(name, miles) async {
+    // row to insert
+    Map<String, dynamic> row = {
+      DatabaseHelper.columnName: name,
+      DatabaseHelper.columnMiles: miles
+    };
+    Car car = Car.fromMap(row);
+    final id = await dbHelper.insert(car);
+    //_showMessageInScaffold('inserted row id: $id');
+  }
+
   void moveToLastscreen(){
     Navigator.pop(context, true);
   }
 
-  void _save() async {
-
-    moveToLastscreen();
-
-    int result;
-    result = await helper.insertNote(note);
-
-    if (result != 0) {
-      //sucess
-      _showAlert('status', 'Note Saved');
-    } else {
-      _showAlert('status', 'error saving data');
-    }
-  }
-
-    void _showAlert(String name, String message){
-
-    AlertDialog alertDialog = AlertDialog(
-      title: Text(name),
-      content: Text(message),
-    );
-    showDialog(
-        context: context,
-        builder: (_) => alertDialog);
-    }
-
-    void updateName(){
-    note.name = nameController.text;
-    }
-    void updateNumber(){
-    note.number = numberController.text;
-    }
 
 }
